@@ -11,7 +11,10 @@
   "description": "",
   "dependencies": {
     "bcrypt": "^6.0.0",
+<<<<<<< HEAD
     "dotenv": "^17.2.1",
+=======
+>>>>>>> 0748aa2a71692ce3d155f47e73c520559da7a360
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.16.3"
