@@ -2,7 +2,6 @@
 
 // 1. Expressをインポートする
 const express = require('express');
-<<<<<<< HEAD
 require('dotenv').config();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
@@ -13,25 +12,10 @@ const { Pool } = require('pg');
 const app = express();
 // POSTリクエストのbodyをJSONとして解析するために必要
 app.use(express.json()); 
-=======
-// --- ▼▼ 追加 ▼▼ ---
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
-const { Pool } = require('pg');
-// --- ▲▲ 追加 ▲▲ ---
-
-// 2. Expressアプリのインスタンスを作成する
-const app = express();
-// --- ▼▼ 追加 ▼▼ ---
-// POSTリクエストのbodyをJSONとして解析するために必要
-app.use(express.json()); 
-// --- ▲▲ 追加 ▲▲ ---
->>>>>>> 0748aa2a71692ce3d155f47e73c520559da7a360
 
 // 3. サーバーがリッスンするポート番号を設定する
 const port = 3000;
 
-<<<<<<< HEAD
 // データベース接続設定
 const pool = new Pool({
   user: 'postgres',       // ご自身のPostgreSQLユーザー名
@@ -43,21 +27,6 @@ const pool = new Pool({
 
 // JWTの秘密鍵
 const JWT_SECRET = process.env.JWT_SECRET; 
-=======
-// --- ▼▼ 追加 ▼▼ ---
-// データベース接続設定
-const pool = new Pool({
-  user: 'your_db_user',       // ご自身のPostgreSQLユーザー名
-  host: 'localhost',
-  database: 'secret_base_db', // ご自身のデータベース名
-  password: 'your_db_password',  // ご自身のパスワード
-  port: 5432,
-});
-
-// JWTの秘密鍵（これは絶対に公開しないでください）
-const JWT_SECRET = 'your-super-secret-key'; 
-// --- ▲▲ 追加 ▲▲ ---
->>>>>>> 0748aa2a71692ce3d155f47e73c520559da7a360
 
 
 // 4. ルートURL ('/') へのGETリクエストに対する処理
@@ -65,20 +34,12 @@ app.get('/', (req, res) => {
   res.send('皆の秘密基地サーバーへようこそ！');
 });
 
-<<<<<<< HEAD
-=======
-
->>>>>>> 0748aa2a71692ce3d155f47e73c520559da7a360
 // --- ▼▼ ここからAPIを実装 ▼▼ ---
 
 // ## アカウント登録API (/api/register) ##
 app.post('/api/register', async (req, res) => {
   try {
-<<<<<<< HEAD
     const { username, email, password } = req.body;
-=======
-    const { username, password } = req.body;
->>>>>>> 0748aa2a71692ce3d155f47e73c520559da7a360
 
     // パスワードをハッシュ化
     const salt = await bcrypt.genSalt(10);
@@ -86,13 +47,8 @@ app.post('/api/register', async (req, res) => {
 
     // データベースに新しいユーザーを保存
     const newUser = await pool.query(
-<<<<<<< HEAD
       "INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING *",
       [username, email, hashedPassword]
-=======
-      "INSERT INTO users (username, password) VALUES ($1, $2) RETURNING *",
-      [username, hashedPassword]
->>>>>>> 0748aa2a71692ce3d155f47e73c520559da7a360
     );
 
     res.status(201).json({ message: "アカウントが正常に作成されました。", userId: newUser.rows[0].id });
@@ -115,11 +71,7 @@ app.post('/api/login', async (req, res) => {
     }
 
     // パスワードが正しいか確認
-<<<<<<< HEAD
     const validPassword = await bcrypt.compare(password, user.rows[0].password_hash);
-=======
-    const validPassword = await bcrypt.compare(password, user.rows[0].password);
->>>>>>> 0748aa2a71692ce3d155f47e73c520559da7a360
 
     if (!validPassword) {
       return res.status(401).json({ error: "パスワードが正しくありません。" });
@@ -144,7 +96,7 @@ app.post('/api/login', async (req, res) => {
 // 5. 指定したポートでサーバーを起動
 app.listen(port, () => {
   console.log(`サーバーがポート ${port} で起動しました。 http://localhost:${port}`);
-<<<<<<< HEAD
+  
 });
 
 
@@ -261,6 +213,3 @@ app.delete('/api/todos/:id', authenticateToken, async (req, res) => {
 });
 
 // --- ▲▲ ここまでToDoリストのCRUD API ---
-=======
-});
->>>>>>> 0748aa2a71692ce3d155f47e73c520559da7a360
