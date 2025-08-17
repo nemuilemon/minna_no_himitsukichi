@@ -2,6 +2,7 @@
 
 // 1. Expressをインポートする
 const express = require('express');
+require('dotenv').config();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
@@ -17,15 +18,15 @@ const port = 3000;
 
 // データベース接続設定
 const pool = new Pool({
-  user: 'your_db_user',       // ご自身のPostgreSQLユーザー名
+  user: 'postgres',       // ご自身のPostgreSQLユーザー名
   host: 'localhost',
-  database: 'secret_base_db', // ご自身のデータベース名
-  password: 'your_db_password',  // ご自身のパスワード
+  database: process.env.postgres_database, // ご自身のデータベース名
+  password: process.env.postgres_database_password,  // ご自身のパスワード
   port: 5432,
 });
 
-// JWTの秘密鍵（これは絶対に公開しないでください）
-const JWT_SECRET = 'your-super-secret-key'; 
+// JWTの秘密鍵
+const JWT_SECRET = process.env.JWT_SECRET; 
 
 
 // 4. ルートURL ('/') へのGETリクエストに対する処理
@@ -38,7 +39,7 @@ app.get('/', (req, res) => {
 // ## アカウント登録API (/api/register) ##
 app.post('/api/register', async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, email, password } = req.body;
 
     // パスワードをハッシュ化
     const salt = await bcrypt.genSalt(10);
@@ -46,8 +47,8 @@ app.post('/api/register', async (req, res) => {
 
     // データベースに新しいユーザーを保存
     const newUser = await pool.query(
-      "INSERT INTO users (username, password) VALUES ($1, $2) RETURNING *",
-      [username, hashedPassword]
+      "INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING *",
+      [username, email, hashedPassword]
     );
 
     res.status(201).json({ message: "アカウントが正常に作成されました。", userId: newUser.rows[0].id });
@@ -70,7 +71,7 @@ app.post('/api/login', async (req, res) => {
     }
 
     // パスワードが正しいか確認
-    const validPassword = await bcrypt.compare(password, user.rows[0].password);
+    const validPassword = await bcrypt.compare(password, user.rows[0].password_hash);
 
     if (!validPassword) {
       return res.status(401).json({ error: "パスワードが正しくありません。" });
@@ -211,4 +212,3 @@ app.delete('/api/todos/:id', authenticateToken, async (req, res) => {
 });
 
 // --- ▲▲ ここまでToDoリストのCRUD API ---
-
