@@ -11,9 +11,6 @@ const TodoList = () => {
   const [editingText, setEditingText] = useState(''); // 編集中のToDoのテキスト
   const [error, setError] = useState(null); // エラーメッセージを保持
 
-  // APIのベースURL
-  const API_URL = 'http://localhost:3000/api';
-
   // コンポーネントのマウント時にToDoを取得する
   useEffect(() => {
     fetchTodos();
@@ -28,7 +25,7 @@ const TodoList = () => {
         return;
       }
 
-      const response = await fetch(`${API_URL}/todos`, {
+      const response = await fetch(`/api/todos`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -52,7 +49,7 @@ const TodoList = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/todos`, {
+      const response = await fetch(`/api/todos`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -77,7 +74,7 @@ const TodoList = () => {
   const handleUpdateTodo = async (id, updatedData) => {
     try {
         const token = localStorage.getItem('token');
-        const response = await fetch(`${API_URL}/todos/${id}`, {
+        const response = await fetch(`/api/todos/${id}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
@@ -125,7 +122,7 @@ const TodoList = () => {
     if (window.confirm("本当にこのToDoを削除しますか？")) {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`${API_URL}/todos/${id}`, {
+            const response = await fetch(`/api/todos/${id}`, {
                 method: 'DELETE',
                 headers: {
                 'Authorization': `Bearer ${token}`,

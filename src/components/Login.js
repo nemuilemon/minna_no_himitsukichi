@@ -7,7 +7,6 @@ const Login = ({ onLoginSuccess }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const API_URL = 'http://localhost:3000/api';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -19,7 +18,7 @@ const Login = ({ onLoginSuccess }) => {
     }
 
     try {
-      const response = await fetch(`${API_URL}/login`, {
+      const response = await fetch(`/api/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
