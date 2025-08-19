@@ -211,5 +211,101 @@ app.delete('/api/todos/:id', authenticateToken, async (req, res) => {
     res.status(500).send("サーバーエラーが発生しました。");
   }
 });
-
 // --- ▲▲ ここまでToDoリストのCRUD API ---
+
+
+// --- ▼▼ ここから日程管理 (Events) のCRUD APIを実装 ▼▼ ---
+
+// ## 予定作成API (POST /api/events) ##
+app.post('/api/events', authenticateToken, async (req, res) => {
+  try {
+    // リクエストボディから予定の情報を取得
+    const { title, start_at, end_at, location, description, is_recurring, recurrence_rule } = req.body;
+    // ミドルウェアによって設定されたユーザーIDを取得
+    const userId = req.user.userId;
+
+    // 必須項目が空の場合はエラーを返す
+    if (!title || !start_at || !end_at) {
+      return res.status(400).json({ error: "タイトル、開始日時、終了日時は必須です。" });
+    }
+
+    // データベースに新しい予定を保存
+    const newEvent = await pool.query(
+      `INSERT INTO events (user_id, title, start_at, end_at, location, description, is_recurring, recurrence_rule) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [userId, title, start_at, end_at, location, description, is_recurring ?? false, recurrence_rule ?? null]
+    );
+
+    res.status(201).json(newEvent.rows[0]);
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).send("サーバーエラーが発生しました。");
+  }
+});
+
+
+// ## 予定取得API (GET /api/events) ##
+app.get('/api/events', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    // ログイン中のユーザーIDに紐づく予定をすべて取得
+    const allEvents = await pool.query("SELECT * FROM events WHERE user_id = $1 ORDER BY start_at ASC", [userId]);
+
+    res.json(allEvents.rows);
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).send("サーバーエラーが発生しました。");
+  }
+});
+
+
+// ## 予定更新API (PUT /api/events/:id) ##
+app.put('/api/events/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params; // URLから更新対象の予定のIDを取得
+    const userId = req.user.userId;
+    const { title, start_at, end_at, location, description, is_recurring, recurrence_rule } = req.body;
+
+    // 更新対象の予定が存在し、かつそれがログイン中のユーザーのものであることを確認
+    const event = await pool.query("SELECT * FROM events WHERE id = $1 AND user_id = $2", [id, userId]);
+    if (event.rows.length === 0) {
+      return res.status(404).json({ error: "対象の予定が見つからないか、アクセス権がありません。" });
+    }
+
+    // データベースの情報を更新
+    const updatedEvent = await pool.query(
+      `UPDATE events 
+       SET title = $1, start_at = $2, end_at = $3, location = $4, description = $5, is_recurring = $6, recurrence_rule = $7, updated_at = CURRENT_TIMESTAMP 
+       WHERE id = $8 RETURNING *`,
+      [title, start_at, end_at, location, description, is_recurring, recurrence_rule, id]
+    );
+
+    res.json(updatedEvent.rows[0]);
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).send("サーバーエラーが発生しました。");
+  }
+});
+
+
+// ## 予定削除API (DELETE /api/events/:id) ##
+app.delete('/api/events/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params; // URLから削除対象の予定のIDを取得
+    const userId = req.user.userId;
+
+    // 削除対象の予定が存在し、かつそれがログイン中のユーザーのものであることを確認してから削除
+    const deleteOp = await pool.query("DELETE FROM events WHERE id = $1 AND user_id = $2 RETURNING *", [id, userId]);
+
+    if (deleteOp.rows.length === 0) {
+      return res.status(404).json({ error: "対象の予定が見つからないか、アクセス権がありません。" });
+    }
+
+    res.json({ message: "予定が正常に削除されました。" });
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).send("サーバーエラーが発生しました。");
+  }
+});
+// --- ▲▲ ここまで日程管理 (Events) のCRUD API ---
