@@ -265,7 +265,7 @@ app.put('/api/events/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params; // URLから更新対象の予定のIDを取得
     const userId = req.user.userId;
-    const { title, start_at, end_at, location, description, is_recurring, recurrence_rule } = req.body;
+    const { title, start_at, end_at, location, description, is_recurring, recurrence_rule} = req.body;
 
     // 更新対象の予定が存在し、かつそれがログイン中のユーザーのものであることを確認
     const event = await pool.query("SELECT * FROM events WHERE id = $1 AND user_id = $2", [id, userId]);
@@ -278,7 +278,7 @@ app.put('/api/events/:id', authenticateToken, async (req, res) => {
       `UPDATE events 
        SET title = $1, start_at = $2, end_at = $3, location = $4, description = $5, is_recurring = $6, recurrence_rule = $7, updated_at = CURRENT_TIMESTAMP 
        WHERE id = $8 RETURNING *`,
-      [title, start_at, end_at, location, description, is_recurring, recurrence_rule, id]
+      [title, start_at, end_at, location, description, is_recurring ?? false, recurrence_rule ?? null, id]
     );
 
     res.json(updatedEvent.rows[0]);
