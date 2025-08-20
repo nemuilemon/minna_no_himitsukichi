@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import Login from './components/Login';
-import TodoList from './components/TodoList';
+// TodoListの代わりにDashboardをインポート
+import Dashboard from './components/Dashboard';
 
 function App() {
   // ログイン状態を管理するステート
@@ -29,12 +30,11 @@ function App() {
   
   return (
     <div className="App">
-      {/* ログアウトボタンはログインしている時だけ表示 */}
-      {isLoggedIn && <button onClick={handleLogout} className="logout-button">ログアウト</button>}
-      
-      {/* isLoggedIn の値によって表示するコンポーネントを切り替える */}
+      {/* isLoggedIn の値によって表示するコンポーネントを切り替える
+        TodoListをDashboardに差し替え、handleLogoutをpropsとして渡す
+      */}
       {isLoggedIn ? (
-        <TodoList />
+        <Dashboard onLogout={handleLogout} />
       ) : (
         <Login onLoginSuccess={handleLoginSuccess} />
       )}
@@ -42,28 +42,6 @@ function App() {
   );
 }
 
-// ログアウトボタン用の簡単なスタイル
-const styles = `
-  .logout-button {
-    position: absolute;
-    top: 15px;
-    right: 15px;
-    padding: 8px 16px;
-    background-color: #6c757d;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 0.9rem;
-    z-index: 10;
-  }
-  .logout-button:hover {
-    background-color: #5a6268;
-  }
-`;
-const styleSheet = document.createElement("style");
-styleSheet.innerText = styles;
-document.head.appendChild(styleSheet);
-
+// 以前のログアウトボタン用のスタイルは不要なので削除します
 
 export default App;

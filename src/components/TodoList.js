@@ -142,7 +142,7 @@ const TodoList = () => {
 
   return (
     <div className="todo-container">
-      <h1>人生でやるべきことリスト</h1>
+      <h1>ToDoリスト</h1>
       
       {error && <p className="error-message">{error}</p>}
       
