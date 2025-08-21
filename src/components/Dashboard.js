@@ -7,6 +7,7 @@ import {
 import { Checklist, Event, AccountBalanceWallet } from '@mui/icons-material';
 import TodoList from './TodoList';
 import EventCalendar from './Calendar'; 
+import Transactions from './Transactions';
 
 const drawerWidth = 240;
 
@@ -21,7 +22,7 @@ const Dashboard = ({ onLogout }) => {
       case 'calendar':
         return <EventCalendar />;
       case 'budget':
-        return <Typography>家計簿機能は準備中です。</Typography>;
+        return <Transactions />;
       default:
         return <TodoList />;
     }
