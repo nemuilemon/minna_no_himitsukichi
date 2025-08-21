@@ -309,3 +309,106 @@ app.delete('/api/events/:id', authenticateToken, async (req, res) => {
   }
 });
 // --- ▲▲ ここまで日程管理 (Events) のCRUD API ---
+
+
+// --- ▼▼ ここから家計簿 (Transactions) のCRUD APIを実装 ▼▼ ---
+
+// ## 取引作成API (POST /api/transactions) ##
+app.post('/api/transactions', authenticateToken, async (req, res) => {
+  try {
+
+    // リクエストボディから取引の情報を取得
+    const { type, amount, transaction_date, category, description } = req.body;
+    // ミドルウェアによって設定されたユーザーIDを取得
+    const userId = req.user.userId;
+
+    // 必須項目が空の場合はエラーを返す
+    if (!type || !amount || !transaction_date || !category) {
+      return res.status(400).json({ error: "取引の種類、金額、取引日、カテゴリは必須です。" });
+    }
+
+    // データベースに新しい取引を保存
+    const newTransaction = await pool.query(
+      `INSERT INTO transactions (user_id, type, amount, transaction_date, category, description) 
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [userId, type, amount, transaction_date, category, description]
+    );
+
+    res.status(201).json(newTransaction.rows[0]);
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).send("サーバーエラーが発生しました。");
+  }
+});
+
+
+// ## 取引取得API (GET /api/transactions) ##
+app.get('/api/transactions', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    // ログイン中のユーザーIDに紐づく取引をすべて取得
+    const allTransactions = await pool.query("SELECT * FROM transactions WHERE user_id = $1 ORDER BY transaction_date DESC", [userId]);
+
+    res.json(allTransactions.rows);
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).send("サーバーエラーが発生しました。");
+  }
+});
+
+
+// ## 取引更新API (PUT /api/transactions/:id) ##
+app.put('/api/transactions/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params; // URLから更新対象の取引のIDを取得
+    const userId = req.user.userId;
+    const { type, amount, transaction_date, category, description } = req.body;
+
+    // 更新対象の取引が存在し、かつそれがログイン中のユーザーのものであることを確認
+    const transaction = await pool.query("SELECT * FROM transactions WHERE id = $1 AND user_id = $2", [id, userId]);
+    if (transaction.rows.length === 0) {
+      return res.status(404).json({ error: "対象の取引が見つからないか、アクセス権がありません。" });
+    }
+    
+    // 必須項目が空の場合はエラーを返す
+    if (!type || !amount || !transaction_date || !category) {
+      return res.status(400).json({ error: "取引の種類、金額、取引日、カテゴリは必須です。" });
+    }
+
+    // データベースの情報を更新
+    const updatedTransaction = await pool.query(
+      `UPDATE transactions 
+       SET type = $1, amount = $2, transaction_date = $3, category = $4, description = $5, updated_at = CURRENT_TIMESTAMP 
+       WHERE id = $6 RETURNING *`,
+      [type, amount, transaction_date, category, description, id]
+    );
+
+    res.json(updatedTransaction.rows[0]);
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).send("サーバーエラーが発生しました。");
+  }
+});
+
+
+// ## 取引削除API (DELETE /api/transactions/:id) ##
+app.delete('/api/transactions/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params; // URLから削除対象の取引のIDを取得
+    const userId = req.user.userId;
+
+    // 削除対象の取引が存在し、かつそれがログイン中のユーザーのものであることを確認してから削除
+    const deleteOp = await pool.query("DELETE FROM transactions WHERE id = $1 AND user_id = $2 RETURNING *", [id, userId]);
+
+    if (deleteOp.rows.length === 0) {
+      return res.status(404).json({ error: "対象の取引が見つからないか、アクセス権がありません。" });
+    }
+
+    res.json({ message: "取引が正常に削除されました。" });
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).send("サーバーエラーが発生しました。");
+  }
+});
+// --- ▲▲ ここまで家計簿 (Transactions) のCRUD API ---
