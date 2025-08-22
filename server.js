@@ -1,11 +1,13 @@
 // server.js
 
-// 1. Expressをインポートする
+// 1. Expressと必要なライブラリをインポートする
 const express = require('express');
 require('dotenv').config();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
+const cron = require('node-cron');      
+const nodemailer = require('nodemailer'); 
 
 
 // 2. Expressアプリのインスタンスを作成する
@@ -47,7 +49,7 @@ app.post('/api/register', async (req, res) => {
 
     // データベースに新しいユーザーを保存
     const newUser = await pool.query(
-      "INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING *",
+      "INSERT INTO users (username, email, password_hash, last_accessed_at) VALUES ($1, $2, $3, CURRENT_TIMESTAMP) RETURNING *",
       [username, email, hashedPassword]
     );
 
@@ -76,6 +78,10 @@ app.post('/api/login', async (req, res) => {
     if (!validPassword) {
       return res.status(401).json({ error: "パスワードが正しくありません。" });
     }
+    
+    // 最終アクセス日時を更新
+    await pool.query("UPDATE users SET last_accessed_at = CURRENT_TIMESTAMP WHERE id = $1", [user.rows[0].id]);
+
 
     // JWTを生成してクライアントに返す
     const token = jwt.sign(
@@ -109,11 +115,20 @@ const authenticateToken = (req, res, next) => {
     return res.sendStatus(401); // トークンが存在しない場合はアクセスを拒否
   }
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
+  jwt.verify(token, JWT_SECRET, async (err, user) => { // ★ asyncを追加
     if (err) {
       return res.sendStatus(403); // トークンが無効な場合はアクセスを拒否
     }
     req.user = user; // リクエストオブジェクトにデコードされたユーザー情報（{ userId: ... }）を保存
+    
+    // --- ★★★ 最終アクセス日時を更新する処理を追加 ★★★ ---
+    try {
+        await pool.query("UPDATE users SET last_accessed_at = CURRENT_TIMESTAMP WHERE id = $1", [user.userId]);
+    } catch (dbError) {
+        console.error("Failed to update last_accessed_at:", dbError);
+    }
+    // --- ★★★ ここまで ★★★ ---
+
     next(); // 次の処理へ進む
   });
 };
@@ -412,3 +427,59 @@ app.delete('/api/transactions/:id', authenticateToken, async (req, res) => {
   }
 });
 // --- ▲▲ ここまで家計簿 (Transactions) のCRUD API ---
+
+
+// --- ▼▼ ここから「生存確認」機能の実装 ▼▼ ---
+
+// 1. メール送信の設定 (Nodemailer)
+// ※注意: 実際のプロダクション環境では、Gmailの代わりにSendGridなどの専門的なメール配信サービスの使用を強く推奨します。
+//       Gmailを使用する場合、セキュリティ設定の変更（安全性の低いアプリのアクセス許可）が必要になることがあります。
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER, // .envファイルにご自身のGmailアドレスを記載
+    pass: process.env.GMAIL_APP_PASSWORD, // .envファイルにご自身のGmailアプリパスワードを記載
+  },
+});
+
+// 2. スケジュール実行処理 (node-cron)
+// 毎日深夜1時に実行 ('0 1 * * *')
+cron.schedule('0 1 * * *', async () => {
+  console.log('生存確認のスケジュールタスクを実行します...');
+  try {
+    // 30日以上アクセスのないユーザーを検索
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const inactiveUsers = await pool.query(
+      "SELECT id, username, email FROM users WHERE last_accessed_at < $1",
+      [thirtyDaysAgo]
+    );
+
+    if (inactiveUsers.rows.length === 0) {
+      console.log('アクティブでないユーザーはいませんでした。');
+      return;
+    }
+
+    console.log(`${inactiveUsers.rows.length}人のアクティブでないユーザーが見つかりました。メールを送信します...`);
+
+    // 各ユーザーにメールを送信
+    for (const user of inactiveUsers.rows) {
+      const mailOptions = {
+        from: process.env.GMAIL_USER,
+        to: user.email,
+        subject: '【皆の秘密基地】お変わりなくお過ごしですか？',
+        text: `${user.username}様\n\nお久しぶりです。「皆の秘密基地」です。\n最近ログインされていないようですが、お元気にされていますでしょうか？\n\nまたいつでも、あなたの秘密基地へのお越しをお待ちしております。\n\nhttps://example.com`, // ↑実際のアプリのURLに変更してください
+        html: `<p>${user.username}様</p><p>お久しぶりです。「皆の秘密基地」です。<br>最近ログインされていないようですが、お元気にされていますでしょうか？</p><p>またいつでも、あなたの秘密基地へのお越しをお待ちしております。</p><p><a href="https://example.com">「皆の秘密基地」へアクセスする</a></p>`, // ↑実際のアプリのURLに変更してください
+      };
+
+      await transporter.sendMail(mailOptions);
+      console.log(`${user.email} へのメール送信に成功しました。`);
+    }
+
+  } catch (error) {
+    console.error('生存確認タスク中にエラーが発生しました:', error);
+  }
+});
+
+// --- ▲▲ ここまで「生存確認」機能の実装 ---
