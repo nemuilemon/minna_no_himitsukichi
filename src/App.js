@@ -2,22 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import Login from './components/Login';
-// TodoListの代わりにDashboardをインポート
 import Dashboard from './components/Dashboard';
 
 function App() {
-  // ログイン状態を管理するステート
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  // ★ 改善点: 初期状態をlocalStorageのトークンの有無で直接決定する
+  const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('token'));
 
-  // アプリケーションが最初に読み込まれた時に、トークンの存在を確認する
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      setIsLoggedIn(true);
-    }
-  }, []);
-
-  // ログアウト処理
+  // ログアウト処理（状態更新とトークン削除をここに集約）
   const handleLogout = () => {
     localStorage.removeItem('token'); // トークンを削除
     setIsLoggedIn(false);
@@ -28,11 +19,24 @@ function App() {
     setIsLoggedIn(true);
   };
   
+  // ★★★ 追加部分: axiosインターセプターからの自動ログアウト要求を監視 ★★★
+  useEffect(() => {
+    const handleAuthError = () => {
+      // 認証エラーのイベントを受け取ったら、ログアウト処理を実行
+      handleLogout();
+    };
+
+    // 'auth-error' というカスタムイベントを監視するリスナーを追加
+    window.addEventListener('auth-error', handleAuthError);
+
+    // コンポーネントが不要になった時にイベントリスナーをクリーンアップ（お掃除）する
+    return () => {
+      window.removeEventListener('auth-error', handleAuthError);
+    };
+  }, []); // 空の配列を渡すことで、このuseEffectは最初の1回だけ実行される
+
   return (
     <div className="App">
-      {/* isLoggedIn の値によって表示するコンポーネントを切り替える
-        TodoListをDashboardに差し替え、handleLogoutをpropsとして渡す
-      */}
       {isLoggedIn ? (
         <Dashboard onLogout={handleLogout} />
       ) : (
@@ -41,7 +45,5 @@ function App() {
     </div>
   );
 }
-
-// 以前のログアウトボタン用のスタイルは不要なので削除します
 
 export default App;
