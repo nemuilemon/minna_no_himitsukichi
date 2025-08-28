@@ -327,26 +327,123 @@ app.delete('/api/events/:id', authenticateToken, async (req, res) => {
 
 
 // --- ▼▼ ここから家計簿 (Transactions) のCRUD APIを実装 ▼▼ ---
+// ## カテゴリー取得API (GET /api/categories) ##
+app.get('/api/categories', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const allCategories = await pool.query(
+      "SELECT * FROM categories WHERE user_id = $1 ORDER BY type, name", 
+      [userId]
+    );
+    res.json(allCategories.rows);
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).send("サーバーエラーが発生しました。");
+  }
+});
 
+// ## カテゴリー追加API (POST /api/categories) ##
+// ※備考: カテゴリーの更新・削除APIは必要に応じて後で追加できます。
+app.post('/api/categories', authenticateToken, async (req, res) => {
+  try {
+    const { name, type } = req.body;
+    const userId = req.user.userId;
+
+    if (!name || !type) {
+      return res.status(400).json({ error: "カテゴリー名と種類は必須です。" });
+    }
+    if (type !== 'income' && type !== 'expense') {
+      return res.status(400).json({ error: "種類は 'income' または 'expense' である必要があります。" });
+    }
+
+    const newCategory = await pool.query(
+      "INSERT INTO categories (user_id, name, type) VALUES ($1, $2, $3) RETURNING *",
+      [userId, name, type]
+    );
+    res.status(201).json(newCategory.rows[0]);
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).send("サーバーエラーが発生しました。");
+  }
+});
+// ## カテゴリー更新API (PUT /api/categories/:id) ##
+app.put('/api/categories/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, type } = req.body;
+    const userId = req.user.userId;
+
+    if (!name || !type) {
+      return res.status(400).json({ error: "カテゴリー名と種類は必須です。" });
+    }
+
+    // 更新対象が存在するか、かつ本人のものかを確認
+    const category = await pool.query("SELECT * FROM categories WHERE id = $1 AND user_id = $2", [id, userId]);
+    if (category.rows.length === 0) {
+      return res.status(404).json({ error: "対象のカテゴリーが見つからないか、アクセス権がありません。" });
+    }
+
+    const updatedCategory = await pool.query(
+      "UPDATE categories SET name = $1, type = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING *",
+      [name, type, id]
+    );
+
+    res.json(updatedCategory.rows[0]);
+  } catch (error) {
+    console.error(error.message);
+    if (error.code === '23505') { // unique_violation
+        return res.status(409).json({ error: 'そのカテゴリーは既に使用されています。' });
+    }
+    res.status(500).send("サーバーエラーが発生しました。");
+  }
+});
+
+// ## カテゴリー削除API (DELETE /api/categories/:id) ##
+app.delete('/api/categories/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.userId;
+    
+    // 注意：このカテゴリーを使用している取引(transactions)がある場合、そのまま削除するとエラーになる可能性があります。
+    // 対策１：関連する取引も一緒に削除する（危険な場合も）
+    // 対策２：関連する取引のcategory_idをNULLにする（推奨）
+    // 対策３：クライアント側で「使用中のカテゴリーは削除できません」と表示する（今回はこれを採用）
+
+    // まず、このカテゴリーIDを使用している取引がないかチェック
+    const usageCheck = await pool.query("SELECT id FROM transactions WHERE category_id = $1 AND user_id = $2", [id, userId]);
+    if (usageCheck.rows.length > 0) {
+        return res.status(409).json({ error: "このカテゴリーは既に使用されているため削除できません。" });
+    }
+
+    const deleteOp = await pool.query("DELETE FROM categories WHERE id = $1 AND user_id = $2 RETURNING *", [id, userId]);
+
+    if (deleteOp.rows.length === 0) {
+      return res.status(404).json({ error: "対象のカテゴリーが見つからないか、アクセス権がありません。" });
+    }
+
+    res.json({ message: "カテゴリーが正常に削除されました。" });
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).send("サーバーエラーが発生しました。");
+  }
+});
 // ## 取引作成API (POST /api/transactions) ##
 app.post('/api/transactions', authenticateToken, async (req, res) => {
   try {
-
-    // リクエストボディから取引の情報を取得
-    const { type, amount, transaction_date, category, description } = req.body;
-    // ミドルウェアによって設定されたユーザーIDを取得
+    // categoryの代わりにcategory_idを受け取る
+    const { type, amount, transaction_date, category_id, description } = req.body;
     const userId = req.user.userId;
 
-    // 必須項目が空の場合はエラーを返す
-    if (!type || !amount || !transaction_date || !category) {
+    // バリデーションをcategory_idに変更
+    if (!type || !amount || !transaction_date || !category_id) {
       return res.status(400).json({ error: "取引の種類、金額、取引日、カテゴリは必須です。" });
     }
 
-    // データベースに新しい取引を保存
+    // INSERT文をcategory_idを使うように変更
     const newTransaction = await pool.query(
-      `INSERT INTO transactions (user_id, type, amount, transaction_date, category, description) 
+      `INSERT INTO transactions (user_id, type, amount, transaction_date, description, category_id) 
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [userId, type, amount, transaction_date, category, description]
+      [userId, type, amount, transaction_date, description, category_id]
     );
 
     res.status(201).json(newTransaction.rows[0]);
@@ -356,14 +453,20 @@ app.post('/api/transactions', authenticateToken, async (req, res) => {
   }
 });
 
-
 // ## 取引取得API (GET /api/transactions) ##
 app.get('/api/transactions', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
 
-    // ログイン中のユーザーIDに紐づく取引をすべて取得
-    const allTransactions = await pool.query("SELECT * FROM transactions WHERE user_id = $1 ORDER BY transaction_date DESC", [userId]);
+    // categoriesテーブルをJOINして、カテゴリー名も取得できるようにする
+    const allTransactions = await pool.query(
+      `SELECT t.*, c.name AS category_name, c.type AS category_type
+       FROM transactions t
+       LEFT JOIN categories c ON t.category_id = c.id
+       WHERE t.user_id = $1 
+       ORDER BY t.transaction_date DESC`, 
+      [userId]
+    );
 
     res.json(allTransactions.rows);
   } catch (error) {
@@ -372,31 +475,30 @@ app.get('/api/transactions', authenticateToken, async (req, res) => {
   }
 });
 
-
 // ## 取引更新API (PUT /api/transactions/:id) ##
 app.put('/api/transactions/:id', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params; // URLから更新対象の取引のIDを取得
+    const { id } = req.params; 
     const userId = req.user.userId;
-    const { type, amount, transaction_date, category, description } = req.body;
+    // categoryの代わりにcategory_idを受け取る
+    const { type, amount, transaction_date, category_id, description } = req.body;
 
-    // 更新対象の取引が存在し、かつそれがログイン中のユーザーのものであることを確認
     const transaction = await pool.query("SELECT * FROM transactions WHERE id = $1 AND user_id = $2", [id, userId]);
     if (transaction.rows.length === 0) {
       return res.status(404).json({ error: "対象の取引が見つからないか、アクセス権がありません。" });
     }
     
-    // 必須項目が空の場合はエラーを返す
-    if (!type || !amount || !transaction_date || !category) {
+    // バリデーションをcategory_idに変更
+    if (!type || !amount || !transaction_date || !category_id) {
       return res.status(400).json({ error: "取引の種類、金額、取引日、カテゴリは必須です。" });
     }
 
-    // データベースの情報を更新
+    // UPDATE文をcategory_idを使うように変更
     const updatedTransaction = await pool.query(
       `UPDATE transactions 
-       SET type = $1, amount = $2, transaction_date = $3, category = $4, description = $5, updated_at = CURRENT_TIMESTAMP 
+       SET type = $1, amount = $2, transaction_date = $3, description = $4, category_id = $5, updated_at = CURRENT_TIMESTAMP 
        WHERE id = $6 RETURNING *`,
-      [type, amount, transaction_date, category, description, id]
+      [type, amount, transaction_date, description, category_id, id]
     );
 
     res.json(updatedTransaction.rows[0]);
@@ -405,7 +507,6 @@ app.put('/api/transactions/:id', authenticateToken, async (req, res) => {
     res.status(500).send("サーバーエラーが発生しました。");
   }
 });
-
 
 // ## 取引削除API (DELETE /api/transactions/:id) ##
 app.delete('/api/transactions/:id', authenticateToken, async (req, res) => {
