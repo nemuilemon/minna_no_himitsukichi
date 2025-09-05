@@ -29,9 +29,45 @@ router.post('/', authenticateToken, async (req, res) => {
 router.get('/', authenticateToken, async (req, res) => {
     const userId = req.user.userId;
 
-    const allTodos = await pool.query("SELECT * FROM todos WHERE user_id = $1 ORDER BY created_at DESC", [userId]);
+    // positionがNULLのレコードを最後尾に、それ以外はposition順でソート
+    const allTodos = await pool.query("SELECT * FROM todos WHERE user_id = $1 ORDER BY position ASC NULLS LAST, created_at DESC", [userId]);
 
     res.json(allTodos.rows);
+});
+
+// ## ToDoの並び順更新API (PUT /api/todos/reorder) ##
+router.put('/reorder', authenticateToken, async (req, res) => {
+  const userId = req.user.userId;
+  const { todos } = req.body; // フロントから送られてくる、並び替えられたToDoの配列
+
+  if (!Array.isArray(todos)) {
+    return res.status(400).json({ error: "ToDoリストのデータ形式が正しくありません。" });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN'); // トランザクション開始
+
+    // 配列の順番通りに position を更新
+    for (let i = 0; i < todos.length; i++) {
+      const todoId = todos[i].id;
+      const newPosition = i;
+      await client.query(
+        "UPDATE todos SET position = $1 WHERE id = $2 AND user_id = $3",
+        [newPosition, todoId, userId]
+      );
+    }
+
+    await client.query('COMMIT'); // トランザクション確定
+    res.json({ message: "ToDoの並び順が正常に更新されました。" });
+
+  } catch (error) {
+    await client.query('ROLLBACK'); // エラー発生時はロールバック
+    console.error(error.message);
+    res.status(500).send("サーバーエラーが発生しました。");
+  } finally {
+    client.release(); // コネクションをプールに返却
+  }
 });
 
 // ## ToDo更新API (PUT /api/todos/:id) ##
