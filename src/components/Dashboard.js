@@ -8,11 +8,12 @@ import { Checklist, Event, AccountBalanceWallet } from '@mui/icons-material';
 import TodoList from './TodoList';
 import EventCalendar from './Calendar'; 
 import Transactions from './Transactions';
+import { useAuth } from '../context/AuthContext'; // useAuthをインポート
 
 const drawerWidth = 240;
 
-// onLogoutをpropsとして受け取る
-const Dashboard = ({ onLogout }) => { 
+const Dashboard = () => { 
+  const { logout } = useAuth(); // useAuthからlogoutを取得
   const [selectedComponent, setSelectedComponent] = useState('todo');
 
   const renderComponent = () => {
@@ -85,9 +86,6 @@ const Dashboard = ({ onLogout }) => {
       </Box>
     </Box>
   );
-};
-
-export default Dashboard;);
 };
 
 export default Dashboard;
