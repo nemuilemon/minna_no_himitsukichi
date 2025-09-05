@@ -17,8 +17,8 @@ import {
 } from '@mui/material';
 
 // カレンダーの日本語化設定
-moment.locale('ja');
-const localizer = momentLocalizer(moment);
+dayjs.locale('ja');
+const localizer = dayjsLocalizer(dayjs);
 
 const messages = {
   allDay: '終日', previous: '前', next: '次', today: '今日', month: '月',

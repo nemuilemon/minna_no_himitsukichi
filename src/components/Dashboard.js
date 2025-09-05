@@ -47,7 +47,7 @@ const Dashboard = ({ onLogout }) => {
             皆の秘密基地
           </Typography>
           {/* ログアウトボタンを追加 */}
-          <Button color="inherit" onClick={onLogout}>
+          <Button color="inherit" onClick={logout}>
             ログアウト
           </Button>
         </Toolbar>
@@ -85,6 +85,9 @@ const Dashboard = ({ onLogout }) => {
       </Box>
     </Box>
   );
+};
+
+export default Dashboard;);
 };
 
 export default Dashboard;

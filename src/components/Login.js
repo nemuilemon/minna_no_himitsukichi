@@ -1,16 +1,18 @@
 // src/components/Login.js
 
 import React, { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 import './Login.css';
 
-const Login = ({ onLoginSuccess }) => {
+const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const { login } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(''); // エラーメッセージをリセット
+    setError('');
 
     if (!username || !password) {
       setError('ユーザー名とパスワードを入力してください。');
@@ -29,13 +31,10 @@ const Login = ({ onLoginSuccess }) => {
       const data = await response.json();
 
       if (!response.ok) {
-        // サーバーからのエラーメッセージを表示
         throw new Error(data.error || 'ログインに失敗しました。');
       }
       
-      // ログイン成功
-      localStorage.setItem('token', data.token); // トークンを保存
-      onLoginSuccess(); // 親コンポーネントに成功を通知
+      login(data.token);
 
     } catch (err) {
       setError(err.message);
