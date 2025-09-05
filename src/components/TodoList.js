@@ -134,7 +134,7 @@ const TodoList = () => {
   };
   
   // ★★★ ドラッグが終了したときの処理を定義する関数 (New) ★★★
-  const onDragEnd = (result) => {
+  const onDragEnd = async (result) => {
     // ドロップ先がなければ何もしない
     if (!result.destination) {
       return;
@@ -145,10 +145,32 @@ const TodoList = () => {
     const [reorderedItem] = items.splice(result.source.index, 1);
     // ドロップ先にアイテムを挿入
     items.splice(result.destination.index, 0, reorderedItem);
-    // stateを更新
+    // stateを更新して、画面に即時反映
     setTodos(items);
-    // 注意：この時点では、画面リロードで順番は元に戻ります。
-    // 順番を永続化するには、次のステップでAPIとDBの改修が必要です。
+
+    // APIを叩いてサーバー側の順序も更新
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/todos/reorder`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ todos: items }), // 更新されたリスト全体を送信
+      });
+
+      if (!response.ok) {
+        throw new Error('ToDoの並び替えに失敗しました。');
+      }
+      // 必要であれば、ここで成功のメッセージなどを表示
+
+    } catch (err) {
+      setError(err.message);
+      // エラーが発生した場合、UIを元の状態に戻すことも検討
+      // (今回はシンプルにするため実装しない)
+      fetchTodos(); // サーバーの状態にUIを同期
+    }
   };
 
   return (
