@@ -23,6 +23,9 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
+// プロキシサーバーを信頼する設定 (express-rate-limitのため)
+app.set('trust proxy', 1);
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // Limit each IP to 100 requests per windowMs
@@ -39,12 +42,16 @@ const authRouter = require('./routes/auth');
 const todosRouter = require('./routes/todos');
 const eventsRouter = require('./routes/events');
 const transactionsRouter = require('./routes/transactions');
+const categoriesRouter = require('./routes/categories');
+const todoCategoriesRouter = require('./routes/todo_categories');
 const userRouter = require('./routes/user');
 
 app.use('/api', authRouter);
 app.use('/api/todos', todosRouter);
 app.use('/api/events', eventsRouter);
 app.use('/api/transactions', transactionsRouter);
+app.use('/api/categories', categoriesRouter);
+app.use('/api/todo-categories', todoCategoriesRouter);
 app.use('/api/user', userRouter);
 
 // 5. ルートURL ('/') へのGETリクエストに対する処理

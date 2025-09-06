@@ -6,7 +6,7 @@ const authenticateToken = require('../middleware/auth');
 // ## ToDo作成API (POST /api/todos) ##
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { title, description, priority, due_date, category } = req.body;
+    const { title, description, priority, due_date, todo_category_id } = req.body;
     const userId = req.user.userId;
 
     if (!title) {
@@ -14,8 +14,8 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     const newTodo = await pool.query(
-      "INSERT INTO todos (user_id, title, description, priority, due_date, category) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
-      [userId, title, description, priority, due_date, category]
+      "INSERT INTO todos (user_id, title, description, priority, due_date, todo_category_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
+      [userId, title, description, priority, due_date, todo_category_id]
     );
 
     res.status(201).json(newTodo.rows[0]);
@@ -29,8 +29,14 @@ router.post('/', authenticateToken, async (req, res) => {
 router.get('/', authenticateToken, async (req, res) => {
     const userId = req.user.userId;
 
-    // positionがNULLのレコードを最後尾に、それ以外はposition順でソート
-    const allTodos = await pool.query("SELECT * FROM todos WHERE user_id = $1 ORDER BY position ASC NULLS LAST, created_at DESC", [userId]);
+    const allTodos = await pool.query(
+      `SELECT t.*, tc.name AS category_name 
+       FROM todos t
+       LEFT JOIN todo_categories tc ON t.todo_category_id = tc.id
+       WHERE t.user_id = $1 
+       ORDER BY t.position ASC NULLS LAST, t.created_at DESC`,
+      [userId]
+    );
 
     res.json(allTodos.rows);
 });
@@ -75,7 +81,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.userId;
-    const { title, description, priority, due_date, category, is_completed } = req.body;
+    const { title, description, priority, due_date, todo_category_id, is_completed } = req.body;
 
     const todo = await pool.query("SELECT * FROM todos WHERE id = $1 AND user_id = $2", [id, userId]);
     if (todo.rows.length === 0) {
@@ -83,8 +89,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
 
     const updatedTodo = await pool.query(
-      "UPDATE todos SET title = $1, description = $2, priority = $3, due_date = $4, category = $5, is_completed = $6, updated_at = CURRENT_TIMESTAMP WHERE id = $7 RETURNING *",
-      [title, description, priority, due_date, category, is_completed, id]
+      "UPDATE todos SET title = $1, description = $2, priority = $3, due_date = $4, todo_category_id = $5, is_completed = $6, updated_at = CURRENT_TIMESTAMP WHERE id = $7 RETURNING *",
+      [title, description, priority, due_date, todo_category_id, is_completed, id]
     );
 
     res.json(updatedTodo.rows[0]);
