@@ -59,6 +59,14 @@
   background-color: #0056b3;
 }
 
+.guest-login-btn {
+  background-color: #6c757d;
+}
+
+.guest-login-btn:hover {
+  background-color: #5a6268;
+}
+
 .error-message {
   color: #d9534f;
   text-align: center;

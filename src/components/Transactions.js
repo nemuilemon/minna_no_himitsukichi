@@ -1,168 +1,69 @@
+
 // src/components/Transactions.js
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { 
+  Box, Paper, Typography, Grid, TextField, Button, Select, MenuItem, 
+  List, ListItem, ListItemText, IconButton, Dialog, DialogActions, 
+  DialogContent, DialogTitle, Snackbar, Alert, FormControl, InputLabel 
+} from '@mui/material';
+import { Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
+import './Transactions.css';
 
 const Transactions = () => {
   // --- ステート変数の定義 ---
   const [transactions, setTransactions] = useState([]);
-  const [categories, setCategories] = useState([]); // カテゴリーリストを保持するstate
-  const [type, setType] = useState('expense'); // フォームの取引種別
-  const [amount, setAmount] = useState(''); // フォームの金額
-  const [transactionDate, setTransactionDate] = useState(new Date().toISOString().slice(0, 10)); // フォームの取引日
-  const [categoryId, setCategoryId] = useState(''); // categoryをcategoryIdに変更し、IDを保持する
-  const [description, setDescription] = useState(''); // フォームの説明
-  const [error, setError] = useState(null); // エラーメッセージ
+  const [categories, setCategories] = useState([]);
+  const [type, setType] = useState('expense');
+  const [amount, setAmount] = useState('');
+  const [transactionDate, setTransactionDate] = useState(new Date().toISOString().slice(0, 10));
+  const [categoryId, setCategoryId] = useState('');
+  const [description, setDescription] = useState('');
   const [summary, setSummary] = useState({ income: 0, expense: 0, balance: 0 });
 
-  // カテゴリー管理用のステート
-  const [isManagingCategories, setIsManagingCategories] = useState(false); // 管理UIの表示切替
-  const [newCategoryName, setNewCategoryName] = useState(''); // 新規カテゴリー名
-  const [newCategoryType, setNewCategoryType] = useState('expense'); // 新規カテゴリー種別
+  // UI制御用のステート
+  const [isManagingCategories, setIsManagingCategories] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryType, setNewCategoryType] = useState('expense');
+  const [editCategory, setEditCategory] = useState(null); // { id, name, type }
+  const [deleteCategory, setDeleteCategory] = useState(null); // { id }
+  const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' });
 
-  // ---副作用フック (useEffect)---
-  useEffect(() => {
-    // 初回レンダリング時に取引とカテゴリーの両方を取得する
-    fetchTransactions();
-    fetchCategories();
-  }, []);
-  
-  useEffect(() => {
-    calculateSummary();
-  }, [transactions]);
+  const token = localStorage.getItem('token');
 
-
-  // ---非同期関数---
-  // サーバーからログイン中のユーザーの取引データを取得する関数
-  const fetchTransactions = async () => {
+  // --- データ取得 ---
+  const fetchTransactions = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
       const response = await axios.get('/api/transactions', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setTransactions(response.data);
     } catch (err) {
-      setError("データの取得に失敗しました。");
+      setNotification({ open: true, message: '取引データの取得に失敗しました。', severity: 'error' });
       console.error(err);
     }
-  };
+  }, [token]);
 
-  // カテゴリーを取得する関数
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
       const response = await axios.get('/api/categories', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setCategories(response.data);
     } catch (err) {
-      console.error("カテゴリーの取得に失敗しました:", err);
-    }
-  };
-
-  // フォームの送信処理（新しい取引を追加する関数）
-  const handleSubmit = async (e) => {
-    e.preventDefault(); // フォーム送信時のデフォルトの画面遷移を防ぐ
-    if (!type || !amount || !transactionDate || !categoryId) {
-      setError("必須項目をすべて入力してください。");
-      return;
-    }
-    try {
-      const token = localStorage.getItem('token');
-      const newTransaction = { type, amount: parseFloat(amount), transaction_date: transactionDate, category_id: parseInt(categoryId), description };
-      
-      await axios.post('/api/transactions', newTransaction, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      fetchTransactions(); // データを再取得してUIを更新
-
-      // フォームをリセット
-      setAmount('');
-      setCategoryId('');
-      setDescription('');
-      setError(null);
-    } catch (err) {
-      setError("取引の追加に失敗しました。");
+      setNotification({ open: true, message: 'カテゴリーの取得に失敗しました。', severity: 'error' });
       console.error(err);
     }
-  };
-  
-  // 取引を削除する関数
-  const handleDelete = async (id) => {
-    try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`/api/transactions/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      // 削除されたID以外の取引でリストを再構築
-      setTransactions(transactions.filter(t => t.id !== id));
-    } catch (err) {
-      setError("削除に失敗しました。");
-      console.error(err);
-    }
-  };
+  }, [token]);
 
-  // ---カテゴリー管理用の関数---
+  useEffect(() => {
+    fetchTransactions();
+    fetchCategories();
+  }, [fetchTransactions, fetchCategories]);
 
-  // 新規カテゴリーを追加する関数
-  const handleAddCategory = async () => {
-    if (!newCategoryName) {
-      alert("カテゴリー名を入力してください。");
-      return;
-    }
-    try {
-      const token = localStorage.getItem('token');
-      await axios.post('/api/categories', { name: newCategoryName, type: newCategoryType }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setNewCategoryName('');
-      fetchCategories(); // カテゴリーリストを再取得して更新
-    } catch (err) {
-      alert("カテゴリーの追加に失敗しました。");
-      console.error(err);
-    }
-  };
-
-  // カテゴリーを削除する関数
-  const handleDeleteCategory = async (id) => {
-    if (window.confirm("このカテゴリーを本当に削除しますか？")) {
-      try {
-        const token = localStorage.getItem('token');
-        await axios.delete(`/api/categories/${id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        fetchCategories(); // カテゴリーリストを再取得
-      } catch (err) {
-        // サーバーからのエラーメッセージを表示
-        alert(err.response?.data?.error || "カテゴリーの削除に失敗しました。");
-        console.error(err);
-      }
-    }
-  };
-
-  // カテゴリー名を更新する関数
-  const handleUpdateCategory = async (id) => {
-    const newName = prompt("新しいカテゴリー名を入力してください。");
-    if (newName && newName.trim() !== '') {
-        const categoryToUpdate = categories.find(c => c.id === id);
-        try {
-            const token = localStorage.getItem('token');
-            await axios.put(`/api/categories/${id}`, { name: newName, type: categoryToUpdate.type }, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            fetchCategories(); // カテゴリーリストを再取得
-        } catch (err) {
-            alert(err.response?.data?.error || "カテゴリーの更新に失敗しました。");
-            console.error(err);
-        }
-    }
-  };
-
-
-  // ---通常関数---
-  // 月ごとのサマリーを計算する関数
-  const calculateSummary = () => {
+  // --- サマリー計算 ---
+  useEffect(() => {
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
 
@@ -180,134 +81,293 @@ const Transactions = () => {
       }
     });
 
-    setSummary({
-      income,
-      expense,
-      balance: income - expense,
-    });
+    setSummary({ income, expense, balance: income - expense });
+  }, [transactions]);
+
+  // --- イベントハンドラ ---
+  const handleNotificationClose = (event, reason) => {
+    if (reason === 'clickaway') {
+      return;
+    }
+    setNotification({ ...notification, open: false });
   };
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!type || !amount || !transactionDate || !categoryId) {
+      setNotification({ open: true, message: '必須項目をすべて入力してください。', severity: 'warning' });
+      return;
+    }
+    try {
+      const newTransaction = { type, amount: parseFloat(amount), transaction_date: transactionDate, category_id: parseInt(categoryId), description };
+      await axios.post('/api/transactions', newTransaction, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchTransactions();
+      setAmount('');
+      setCategoryId('');
+      setDescription('');
+      setNotification({ open: true, message: '取引を追加しました。', severity: 'success' });
+    } catch (err) {
+      setNotification({ open: true, message: '取引の追加に失敗しました。', severity: 'error' });
+      console.error(err);
+    }
+  };
 
-  // ---JSX (画面の見た目を定義)---
+  const handleDelete = async (id) => {
+    try {
+      await axios.delete(`/api/transactions/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setTransactions(transactions.filter(t => t.id !== id));
+      setNotification({ open: true, message: '取引を削除しました。', severity: 'success' });
+    } catch (err) {
+      setNotification({ open: true, message: '削除に失敗しました。', severity: 'error' });
+      console.error(err);
+    }
+  };
+
+  // --- カテゴリー管理 ---
+  const handleAddCategory = async () => {
+    if (!newCategoryName) {
+      setNotification({ open: true, message: 'カテゴリー名を入力してください。', severity: 'warning' });
+      return;
+    }
+    try {
+      await axios.post('/api/categories', { name: newCategoryName, type: newCategoryType }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setNewCategoryName('');
+      fetchCategories();
+      setNotification({ open: true, message: 'カテゴリーを追加しました。', severity: 'success' });
+    } catch (err) {
+      setNotification({ open: true, message: 'カテゴリーの追加に失敗しました。', severity: 'error' });
+      console.error(err);
+    }
+  };
+
+  const handleUpdateCategory = async () => {
+    if (!editCategory || !editCategory.name.trim()) {
+      setNotification({ open: true, message: 'カテゴリー名を入力してください。', severity: 'warning' });
+      return;
+    }
+    try {
+      await axios.put(`/api/categories/${editCategory.id}`, { name: editCategory.name, type: editCategory.type }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchCategories();
+      setEditCategory(null);
+      setNotification({ open: true, message: 'カテゴリーを更新しました。', severity: 'success' });
+    } catch (err) {
+      setNotification({ open: true, message: err.response?.data?.error || 'カテゴリーの更新に失敗しました。', severity: 'error' });
+      console.error(err);
+    }
+  };
+
+  const confirmDeleteCategory = async () => {
+    if (!deleteCategory) return;
+    try {
+      await axios.delete(`/api/categories/${deleteCategory.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchCategories();
+      setDeleteCategory(null);
+      setNotification({ open: true, message: 'カテゴリーを削除しました。', severity: 'success' });
+    } catch (err) {
+      setNotification({ open: true, message: err.response?.data?.error || 'カテゴリーの削除に失敗しました。', severity: 'error' });
+      console.error(err);
+    }
+  };
+
+  // --- レンダリング ---
   return (
-    <div style={{ maxWidth: '800px', margin: '2rem auto', fontFamily: 'sans-serif' }}>
-      <h2>家計簿</h2>
+    <Box className="transactions-container">
+      <Typography variant="h4" gutterBottom>家計簿</Typography>
       
-      {/* 月ごとのサマリー表示 */}
-      <div style={{ padding: '1rem', border: '1px solid #ddd', borderRadius: '8px', marginBottom: '2rem', background: '#f9f9f9' }}>
-        <h3>今月のサマリー</h3>
-        <div style={{ display: 'flex', justifyContent: 'space-around' }}>
-          <p><strong>収入:</strong> <span style={{ color: 'green' }}>{summary.income.toLocaleString()} 円</span></p>
-          <p><strong>支出:</strong> <span style={{ color: 'red' }}>{summary.expense.toLocaleString()} 円</span></p>
-          <p><strong>差引:</strong> <span style={{ fontWeight: 'bold' }}>{summary.balance.toLocaleString()} 円</span></p>
-        </div>
-      </div>
+      {/* サマリー */}
+      <Paper elevation={3} className="summary-card">
+        <Box p={2}>
+          <Typography variant="h5" gutterBottom>今月のサマリー</Typography>
+          <Box className="summary-content">
+            <Typography><strong>収入:</strong> <span className="income-text">{summary.income.toLocaleString()} 円</span></Typography>
+            <Typography><strong>支出:</strong> <span className="expense-text">{summary.expense.toLocaleString()} 円</span></Typography>
+            <Typography><strong>差引:</strong> <span className="balance-text">{summary.balance.toLocaleString()} 円</span></Typography>
+          </Box>
+        </Box>
+      </Paper>
       
-      {/* 新規取引入力フォーム */}
-      <form onSubmit={handleSubmit} style={{ marginBottom: '2rem' }}>
-        <h3>新しい取引を追加</h3>
-        {error && <p style={{ color: 'red' }}>{error}</p>}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
-          <select value={type} onChange={(e) => {
-            setType(e.target.value);
-            setCategoryId(''); // タイプを変更したらカテゴリ選択をリセット
-          }}>
-            <option value="expense">支出</option>
-            <option value="income">収入</option>
-          </select>
-          <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="金額" required />
-          <input type="date" value={transactionDate} onChange={(e) => setTransactionDate(e.target.value)} required />
-          
-          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} required>
-            <option value="">カテゴリを選択</option>
-            {/* 選択中のtype（収入/支出）に応じてカテゴリをフィルタリング */}
-            {categories
-              .filter(c => c.type === type)
-              .map(cat => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-            ))}
-          </select>
+      {/* 取引追加フォーム */}
+      <Paper elevation={3} className="form-card">
+        <Box p={2} component="form" onSubmit={handleSubmit}>
+          <Typography variant="h5" gutterBottom>新しい取引を追加</Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6} md={3}>
+              <FormControl fullWidth>
+                <InputLabel>種別</InputLabel>
+                <Select value={type} label="種別" onChange={(e) => { setType(e.target.value); setCategoryId(''); }}>
+                  <MenuItem value="expense">支出</MenuItem>
+                  <MenuItem value="income">収入</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <TextField type="number" label="金額" value={amount} onChange={(e) => setAmount(e.target.value)} required fullWidth />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <TextField type="date" value={transactionDate} onChange={(e) => setTransactionDate(e.target.value)} required fullWidth />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <FormControl fullWidth required>
+                <InputLabel>カテゴリ</InputLabel>
+                <Select value={categoryId} label="カテゴリ" onChange={(e) => setCategoryId(e.target.value)}>
+                  {categories.filter(c => c.type === type).map(cat => (
+                    <MenuItem key={cat.id} value={cat.id}>{cat.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12}>
+              <TextField label="メモ (任意)" value={description} onChange={(e) => setDescription(e.target.value)} fullWidth />
+            </Grid>
+          </Grid>
+          <Button type="submit" variant="contained" color="primary" sx={{ mt: 2, width: '100%' }}>追加</Button>
+        </Box>
+      </Paper>
 
-          <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="メモ (任意)" />
-        </div>
-        <button type="submit" style={{ marginTop: '1rem', width: '100%', padding: '0.8rem', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px' }}>追加</button>
-      </form>
-      
-      {/* カテゴリー管理セクション */}
-      <div style={{ margin: '2rem 0' }}>
-        <button onClick={() => setIsManagingCategories(!isManagingCategories)}>
+      {/* カテゴリー管理 */}
+      <Box className="category-management-container">
+        <Button variant="outlined" onClick={() => setIsManagingCategories(!isManagingCategories)}>
           {isManagingCategories ? 'カテゴリー管理を閉じる' : 'カテゴリーを管理する'}
-        </button>
-
+        </Button>
         {isManagingCategories && (
-          <div style={{ border: '1px solid #ccc', padding: '1rem', marginTop: '1rem' }}>
-            <h4>新しいカテゴリーを追加</h4>
-            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
-              <input 
-                type="text" 
-                value={newCategoryName} 
-                onChange={(e) => setNewCategoryName(e.target.value)} 
-                placeholder="新しいカテゴリー名" 
-              />
-              <select value={newCategoryType} onChange={(e) => setNewCategoryType(e.target.value)}>
-                <option value="expense">支出</option>
-                <option value="income">収入</option>
-              </select>
-              <button onClick={handleAddCategory}>追加</button>
-            </div>
+          <Paper elevation={2} sx={{ p: 2, mt: 1 }}>
+            <Typography variant="h6">新しいカテゴリーを追加</Typography>
+            <Grid container spacing={2} alignItems="center" sx={{ mb: 2 }}>
+              <Grid item xs={12} sm={5}>
+                <TextField label="新しいカテゴリー名" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} fullWidth />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <FormControl fullWidth>
+                  <InputLabel>種別</InputLabel>
+                  <Select value={newCategoryType} label="種別" onChange={(e) => setNewCategoryType(e.target.value)}>
+                    <MenuItem value="expense">支出</MenuItem>
+                    <MenuItem value="income">収入</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={3}>
+                <Button onClick={handleAddCategory} variant="contained" fullWidth>追加</Button>
+              </Grid>
+            </Grid>
             <hr />
-            <h4>既存のカテゴリー</h4>
-            <h5>支出</h5>
-            <ul style={{listStyle: 'none', padding: 0}}>
-              {categories.filter(c => c.type === 'expense').map(cat => (
-                <li key={cat.id} style={{display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem'}}>
-                  {cat.name}
-                  <div>
-                    <button onClick={() => handleUpdateCategory(cat.id)} style={{marginRight: '0.5rem'}}>編集</button>
-                    <button onClick={() => handleDeleteCategory(cat.id)}>削除</button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-            <h5>収入</h5>
-             <ul style={{listStyle: 'none', padding: 0}}>
-              {categories.filter(c => c.type === 'income').map(cat => (
-                <li key={cat.id} style={{display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem'}}>
-                  {cat.name}
-                  <div>
-                    <button onClick={() => handleUpdateCategory(cat.id)} style={{marginRight: '0.5rem'}}>編集</button>
-                    <button onClick={() => handleDeleteCategory(cat.id)}>削除</button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
+            <Typography variant="h6" sx={{ mt: 2 }}>既存のカテゴリー</Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle1">支出</Typography>
+                <List dense>
+                  {categories.filter(c => c.type === 'expense').map(cat => (
+                    <ListItem key={cat.id} secondaryAction={
+                      <>
+                        <IconButton edge="end" aria-label="edit" onClick={() => setEditCategory(cat)}>
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton edge="end" aria-label="delete" onClick={() => setDeleteCategory(cat)}>
+                          <DeleteIcon />
+                        </IconButton>
+                      </>
+                    }>
+                      <ListItemText primary={cat.name} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle1">収入</Typography>
+                <List dense>
+                  {categories.filter(c => c.type === 'income').map(cat => (
+                    <ListItem key={cat.id} secondaryAction={
+                      <>
+                        <IconButton edge="end" aria-label="edit" onClick={() => setEditCategory(cat)}>
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton edge="end" aria-label="delete" onClick={() => setDeleteCategory(cat)}>
+                          <DeleteIcon />
+                        </IconButton>
+                      </>
+                    }>
+                      <ListItemText primary={cat.name} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Grid>
+            </Grid>
+          </Paper>
         )}
-      </div>
+      </Box>
 
-      {/* 取引リスト */}
-      <div>
-        <h3>取引履歴</h3>
-        <ul style={{ listStyle: 'none', padding: 0 }}>
-          {transactions.map(t => (
-            <li key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.8rem', borderBottom: '1px solid #eee' }}>
-              <div>
-                <strong style={{ color: t.type === 'income' ? 'green' : 'red' }}>
-                  {new Date(t.transaction_date).toLocaleDateString()} - {t.category_name}
-                </strong>
-                <p style={{ margin: '0.2rem 0' }}>{t.description}</p>
-              </div>
-              <div>
-                <span>{parseFloat(t.amount).toLocaleString()} 円</span>
-                <button onClick={() => handleDelete(t.id)} style={{ marginLeft: '1rem', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px' }}>削除</button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
+      {/* 取引履歴 */}
+      <Paper elevation={3}>
+        <Box p={2}>
+          <Typography variant="h5" gutterBottom>取引履歴</Typography>
+          <List>
+            {transactions.map(t => (
+              <ListItem key={t.id} className="transaction-list-item" secondaryAction={
+                <IconButton edge="end" aria-label="delete" onClick={() => handleDelete(t.id)}>
+                  <DeleteIcon />
+                </IconButton>
+              }>
+                <ListItemText 
+                  primary={t.category_name}
+                  secondary={`${new Date(t.transaction_date).toLocaleDateString()} - ${t.description || ''}`}
+                />
+                <Typography variant="body1" className={t.type === 'income' ? 'income-text' : 'expense-text'}>
+                  {t.type === 'income' ? '+' : '-'}{parseFloat(t.amount).toLocaleString()} 円
+                </Typography>
+              </ListItem>
+            ))}
+          </List>
+        </Box>
+      </Paper>
+
+      {/* ダイアログ */}
+      <Dialog open={!!editCategory} onClose={() => setEditCategory(null)}>
+        <DialogTitle>カテゴリーを編集</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="カテゴリー名"
+            type="text"
+            fullWidth
+            variant="standard"
+            value={editCategory?.name || ''}
+            onChange={(e) => setEditCategory({...editCategory, name: e.target.value})}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditCategory(null)}>キャンセル</Button>
+          <Button onClick={handleUpdateCategory}>更新</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!deleteCategory} onClose={() => setDeleteCategory(null)}>
+        <DialogTitle>カテゴリーを削除</DialogTitle>
+        <DialogContent>
+          <Typography>「{deleteCategory?.name}」を本当に削除しますか？</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteCategory(null)}>キャンセル</Button>
+          <Button onClick={confirmDeleteCategory} color="error">削除</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 通知 */}
+      <Snackbar open={notification.open} autoHideDuration={6000} onClose={handleNotificationClose}>
+        <Alert onClose={handleNotificationClose} severity={notification.severity} sx={{ width: '100%' }}>
+          {notification.message}
+        </Alert>
+      </Snackbar>
+    </Box>
   );
 };
 

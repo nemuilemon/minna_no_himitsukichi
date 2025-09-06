@@ -1,260 +1,336 @@
+
 // src/components/TodoList.js
 
-import React, { useState, useEffect } from 'react';
-// ★ react-beautiful-dnd から必要な部品をインポート
+import React, { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import './TodoList.css'; 
+import { 
+  Box, Paper, Typography, Grid, TextField, Button, Select, MenuItem, 
+  List, ListItem, ListItemText, IconButton, Dialog, DialogActions, 
+  DialogContent, DialogTitle, Snackbar, Alert, FormControl, InputLabel, Checkbox
+} from '@mui/material';
+import { Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
 
 const TodoList = () => {
-  // ... ステート変数は変更なし ...
+  // --- ステート定義 ---
   const [todos, setTodos] = useState([]);
-  const [title, setTitle] = useState('');
-  const [category, setCategory] = useState('');
   const [categories, setCategories] = useState([]);
-  const [editingId, setEditingId] = useState(null);
-  const [editingTitle, setEditingTitle] = useState('');
-  const [editingCategory, setEditingCategory] = useState('');
-  const [error, setError] = useState(null);
+  const [title, setTitle] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  
+  // 編集用
+  const [editingTodo, setEditingTodo] = useState(null); // { id, title, todo_category_id }
 
+  // カテゴリー管理用
+  const [isManagingCategories, setIsManagingCategories] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [editCategory, setEditCategory] = useState(null); // { id, name }
+  const [deleteCategory, setDeleteCategory] = useState(null); // { id, name }
 
-  // ... useEffectや他の関数も、新しく追加する onDragEnd 以外は変更なし ...
+  // UI制御用
+  const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' });
+  const token = localStorage.getItem('token');
+
+  // --- データ取得 ---
+  const fetchTodos = useCallback(async () => {
+    try {
+      const response = await axios.get('/api/todos', { headers: { Authorization: `Bearer ${token}` } });
+      setTodos(response.data);
+    } catch (err) {
+      setNotification({ open: true, message: 'ToDoの取得に失敗しました。', severity: 'error' });
+    }
+  }, [token]);
+
+  const fetchTodoCategories = useCallback(async () => {
+    try {
+      const response = await axios.get('/api/todo-categories', { headers: { Authorization: `Bearer ${token}` } });
+      setCategories(response.data);
+    } catch (err) {
+      setNotification({ open: true, message: 'ToDoカテゴリーの取得に失敗しました。', severity: 'error' });
+    }
+  }, [token]);
+
   useEffect(() => {
     fetchTodos();
-    fetchCategories();
-  }, []);
+    fetchTodoCategories();
+  }, [fetchTodos, fetchTodoCategories]);
 
-  const fetchTodos = async () => {
-    try {
-      setError(null);
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setError("ログインが必要です。");
-        return;
-      }
-      const response = await fetch(`/api/todos`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (!response.ok) {
-        throw new Error('データの取得に失敗しました。');
-      }
-      const data = await response.json();
-      setTodos(data);
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-  
-  const fetchCategories = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`/api/categories`, {
-            headers: { 'Authorization': `Bearer ${token}` },
-        });
-        if (!response.ok) {
-            throw new Error('カテゴリの取得に失敗しました。');
-        }
-        const data = await response.json();
-        setCategories(data); 
-      } catch(err) {
-          console.error(err.message);
-      }
-  }
-
+  // --- ToDo操作ハンドラ ---
   const handleAddTodo = async (e) => {
     e.preventDefault();
-    if (!title.trim()) return;
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/todos`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ title, category }),
-      });
-      if (!response.ok) { throw new Error('ToDoの追加に失敗しました。'); }
-      const newTodo = await response.json();
-      setTodos([newTodo, ...todos]);
-      setTitle('');
-      setCategory('');
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-  
-  const handleUpdateTodo = async (id, updatedData) => {
-    try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`/api/todos/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify(updatedData),
-        });
-        if (!response.ok) { throw new Error('ToDoの更新に失敗しました。'); }
-        const updatedTodo = await response.json();
-        setTodos(todos.map(todo => (todo.id === id ? updatedTodo : todo)));
-        setEditingId(null);
-        setEditingTitle('');
-        setEditingCategory('');
-    } catch (err) {
-        setError(err.message);
-    }
-  };
-
-    const handleToggleComplete = (todo) => {
-        handleUpdateTodo(todo.id, { ...todo, is_completed: !todo.is_completed });
-    };
-    
-    const handleDeleteTodo = async (id) => {
-        if (window.confirm("本当にこのToDoを削除しますか？")) {
-            try {
-                const token = localStorage.getItem('token');
-                const response = await fetch(`/api/todos/${id}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` },
-                });
-                if (!response.ok) { throw new Error('ToDoの削除に失敗しました。'); }
-                setTodos(todos.filter(todo => todo.id !== id));
-            } catch (err) {
-                setError(err.message);
-            }
-        }
-    };
-  
-  const startEditing = (todo) => {
-    setEditingId(todo.id);
-    setEditingTitle(todo.title);
-    setEditingCategory(todo.category || '');
-  };
-  
-  const handleEditSubmit = (e, todo) => {
-    e.preventDefault();
-    handleUpdateTodo(todo.id, { ...todo, title: editingTitle, category: editingCategory });
-  };
-  
-  // ★★★ ドラッグが終了したときの処理を定義する関数 (New) ★★★
-  const onDragEnd = async (result) => {
-    // ドロップ先がなければ何もしない
-    if (!result.destination) {
+    if (!title.trim()) {
+      setNotification({ open: true, message: 'タイトルを入力してください。', severity: 'warning' });
       return;
     }
-    // todos配列をコピー
-    const items = Array.from(todos);
-    // ドラッグされたアイテムを一度削除
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    // ドロップ先にアイテムを挿入
-    items.splice(result.destination.index, 0, reorderedItem);
-    // stateを更新して、画面に即時反映
-    setTodos(items);
-
-    // APIを叩いてサーバー側の順序も更新
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/todos/reorder`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ todos: items }), // 更新されたリスト全体を送信
-      });
-
-      if (!response.ok) {
-        throw new Error('ToDoの並び替えに失敗しました。');
-      }
-      // 必要であれば、ここで成功のメッセージなどを表示
-
+      const newTodoData = { title, todo_category_id: categoryId || null };
+      const response = await axios.post('/api/todos', newTodoData, { headers: { Authorization: `Bearer ${token}` } });
+      // 新しいToDoをリストの先頭に追加
+      setTodos([response.data, ...todos]);
+      setTitle('');
+      setCategoryId('');
+      setNotification({ open: true, message: 'ToDoを追加しました。', severity: 'success' });
     } catch (err) {
-      setError(err.message);
-      // エラーが発生した場合、UIを元の状態に戻すことも検討
-      // (今回はシンプルにするため実装しない)
-      fetchTodos(); // サーバーの状態にUIを同期
+      setNotification({ open: true, message: 'ToDoの追加に失敗しました。', severity: 'error' });
     }
   };
 
+  const handleUpdateTodo = async () => {
+    if (!editingTodo || !editingTodo.title.trim()) {
+      setNotification({ open: true, message: 'タイトルを入力してください。', severity: 'warning' });
+      return;
+    }
+    try {
+      const { id, title, todo_category_id, is_completed } = editingTodo;
+      const updatedData = { title, todo_category_id, is_completed };
+      const response = await axios.put(`/api/todos/${id}`, updatedData, { headers: { Authorization: `Bearer ${token}` } });
+      setTodos(todos.map(todo => (todo.id === id ? response.data : todo)));
+      setEditingTodo(null);
+      setNotification({ open: true, message: 'ToDoを更新しました。', severity: 'success' });
+    } catch (err) {
+      setNotification({ open: true, message: 'ToDoの更新に失敗しました。', severity: 'error' });
+    }
+  };
+
+  const handleToggleComplete = async (todo) => {
+    try {
+      const updatedData = { ...todo, is_completed: !todo.is_completed };
+      const response = await axios.put(`/api/todos/${todo.id}`, updatedData, { headers: { Authorization: `Bearer ${token}` } });
+      setTodos(todos.map(t => (t.id === todo.id ? response.data : t)));
+    } catch (err) {
+       setNotification({ open: true, message: 'ToDoの状態更新に失敗しました。', severity: 'error' });
+    }
+  };
+
+  const handleDeleteTodo = async (id) => {
+    try {
+      await axios.delete(`/api/todos/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+      setTodos(todos.filter(todo => todo.id !== id));
+      setNotification({ open: true, message: 'ToDoを削除しました。', severity: 'success' });
+    } catch (err) {
+      setNotification({ open: true, message: 'ToDoの削除に失敗しました。', severity: 'error' });
+    }
+  };
+
+  const onDragEnd = async (result) => {
+    if (!result.destination) return;
+    const items = Array.from(todos);
+    const [reorderedItem] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, reorderedItem);
+    setTodos(items);
+
+    try {
+      await axios.put('/api/todos/reorder', { todos: items }, { headers: { Authorization: `Bearer ${token}` } });
+    } catch (err) {
+      setNotification({ open: true, message: 'ToDoの並び替えに失敗しました。', severity: 'error' });
+      fetchTodos(); // エラー時はサーバーの状態に同期
+    }
+  };
+
+  // --- カテゴリー操作ハンドラ ---
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim()) {
+      setNotification({ open: true, message: 'カテゴリー名を入力してください。', severity: 'warning' });
+      return;
+    }
+    try {
+      await axios.post('/api/todo-categories', { name: newCategoryName }, { headers: { Authorization: `Bearer ${token}` } });
+      setNewCategoryName('');
+      fetchTodoCategories();
+      setNotification({ open: true, message: 'カテゴリーを追加しました。', severity: 'success' });
+    } catch (err) {
+      setNotification({ open: true, message: 'カテゴリーの追加に失敗しました。', severity: 'error' });
+    }
+  };
+
+  const handleUpdateCategory = async () => {
+    if (!editCategory || !editCategory.name.trim()) return;
+    try {
+      await axios.put(`/api/todo-categories/${editCategory.id}`, { name: editCategory.name }, { headers: { Authorization: `Bearer ${token}` } });
+      fetchTodoCategories();
+      setEditCategory(null);
+      setNotification({ open: true, message: 'カテゴリーを更新しました。', severity: 'success' });
+    } catch (err) {
+      setNotification({ open: true, message: err.response?.data?.error || 'カテゴリーの更新に失敗しました。', severity: 'error' });
+    }
+  };
+
+  const confirmDeleteCategory = async () => {
+    if (!deleteCategory) return;
+    try {
+      await axios.delete(`/api/todo-categories/${deleteCategory.id}`, { headers: { Authorization: `Bearer ${token}` } });
+      fetchTodoCategories();
+      setDeleteCategory(null);
+      setNotification({ open: true, message: 'カテゴリーを削除しました。', severity: 'success' });
+    } catch (err) {
+      setNotification({ open: true, message: err.response?.data?.error || 'カテゴリーの削除に失敗しました。', severity: 'error' });
+    }
+  };
+
+  // --- レンダリング ---
   return (
-    <div className="todo-container">
-      <h1>ToDoリスト</h1>
-      
-      {error && <p className="error-message">{error}</p>}
-      
-      {/* ... form部分は変更なし ... */}
-      <form onSubmit={handleAddTodo} className="todo-form">
-        <input
-          className="todo-input-title"
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="新しい目標を追加..."
-        />
-        <select 
-            className="todo-input-category" 
-            value={category} 
-            onChange={(e) => setCategory(e.target.value)}
-        >
-            <option value="">カテゴリ未選択</option>
-            <option value="学習">学習</option>
-            <option value="仕事">仕事</option>
-            <option value="個人開発">個人開発</option>
-            <option value="プライベート">プライベート</option>
-        </select>
-        <button type="submit">追加</button>
-      </form>
-      
-      {/* ★★★ ここからリスト全体を DragDropContext と Droppable で囲む ★★★ */}
+    <Box sx={{ p: 2 }}>
+      <Typography variant="h4" gutterBottom>ToDoリスト</Typography>
+
+      {/* ToDo追加フォーム */}
+      <Paper elevation={3} sx={{ p: 2, mb: 3 }}>
+        <Typography variant="h5" gutterBottom>新しい目標を追加</Typography>
+        <Box component="form" onSubmit={handleAddTodo}>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} sm={6}>
+              <TextField label="タイトル" value={title} onChange={(e) => setTitle(e.target.value)} fullWidth required />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <FormControl fullWidth>
+                <InputLabel>カテゴリ</InputLabel>
+                <Select value={categoryId} label="カテゴリ" onChange={(e) => setCategoryId(e.target.value)}>
+                  <MenuItem value=""><em>カテゴリなし</em></MenuItem>
+                  {categories.map(cat => (
+                    <MenuItem key={cat.id} value={cat.id}>{cat.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={2}>
+              <Button type="submit" variant="contained" fullWidth sx={{ height: '56px' }}>追加</Button>
+            </Grid>
+          </Grid>
+        </Box>
+      </Paper>
+
+      {/* カテゴリー管理 */}
+      <Box sx={{ mb: 3 }}>
+        <Button variant="outlined" onClick={() => setIsManagingCategories(!isManagingCategories)}>
+          {isManagingCategories ? 'カテゴリー管理を閉じる' : 'カテゴリーを管理する'}
+        </Button>
+        {isManagingCategories && (
+          <Paper elevation={2} sx={{ p: 2, mt: 1 }}>
+            <Typography variant="h6">新しいカテゴリーを追加</Typography>
+            <Grid container spacing={2} alignItems="center" sx={{ mb: 2 }}>
+              <Grid item xs={12} sm={9}>
+                <TextField label="新しいカテゴリー名" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} fullWidth />
+              </Grid>
+              <Grid item xs={12} sm={3}>
+                <Button onClick={handleAddCategory} variant="contained" fullWidth>追加</Button>
+              </Grid>
+            </Grid>
+            <hr />
+            <Typography variant="h6" sx={{ mt: 2 }}>既存のカテゴリー</Typography>
+            <List dense>
+              {categories.map(cat => (
+                <ListItem key={cat.id} secondaryAction={
+                  <>
+                    <IconButton edge="end" onClick={() => setEditCategory(cat)}><EditIcon /></IconButton>
+                    <IconButton edge="end" onClick={() => setDeleteCategory(cat)}><DeleteIcon /></IconButton>
+                  </>
+                }>
+                  <ListItemText primary={cat.name} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+        )}
+      </Box>
+
+      {/* ToDoリスト */}
       <DragDropContext onDragEnd={onDragEnd}>
         <Droppable droppableId="todos">
           {(provided) => (
-            <ul className="todo-list" {...provided.droppableProps} ref={provided.innerRef}>
-              {todos.map((todo, index) => (
-                // ★★★ 各リスト項目を Draggable で囲む ★★★
-                <Draggable key={todo.id} draggableId={String(todo.id)} index={index}>
-                  {(provided) => (
-                    <li
-                      ref={provided.innerRef}
-                      {...provided.draggableProps}
-                      {...provided.dragHandleProps} // ← これがドラッグするための「取っ手」になる
-                      className={todo.is_completed ? 'completed' : ''}
-                    >
-                      {editingId === todo.id ? (
-                          // ... 編集フォーム（変更なし） ...
-                          <form onSubmit={(e) => handleEditSubmit(e, todo)} className="edit-form">
-                            <input type="text" value={editingTitle} onChange={(e) => setEditingTitle(e.target.value)} autoFocus />
-                            <select value={editingCategory} onChange={(e) => setEditingCategory(e.target.value)}>
-                                <option value="">カテゴリ未選択</option>
-                                <option value="学習">学習</option>
-                                <option value="仕事">仕事</option>
-                                <option value="個人開発">個人開発</option>
-                                <option value="プライベート">プライベート</option>
-                            </select>
-                            <button type="submit">保存</button>
-                            <button type="button" onClick={() => setEditingId(null)}>中止</button>
-                          </form>
-                      ) : (
-                          // ... 通常表示（変更なし） ...
-                          <>
-                              <div className="todo-item-main">
-                                  <input type="checkbox" checked={todo.is_completed} onChange={() => handleToggleComplete(todo)} />
-                                  <span className="todo-title" onClick={() => handleToggleComplete(todo)}>{todo.title}</span>
-                                  {todo.category && <span className="todo-category">{todo.category}</span>}
-                              </div>
-                              <div className="button-group">
-                                  <button onClick={() => startEditing(todo)} className="edit-button">編集</button>
-                                  <button onClick={() => handleDeleteTodo(todo.id)} className="delete-button">削除</button>
-                              </div>
-                          </>
-                      )}
-                    </li>
-                  )}
-                </Draggable>
-              ))}
-              {provided.placeholder}
-            </ul>
+            <Paper elevation={3} ref={provided.innerRef} {...provided.droppableProps}>
+              <List>
+                {todos.map((todo, index) => (
+                  <Draggable key={todo.id} draggableId={String(todo.id)} index={index}>
+                    {(provided) => (
+                      <ListItem
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        {...provided.dragHandleProps}
+                        divider
+                        sx={{ bgcolor: todo.is_completed ? '#f5f5f5' : '#fff' }}
+                      >
+                        <Checkbox checked={todo.is_completed} onChange={() => handleToggleComplete(todo)} />
+                        <ListItemText 
+                          primary={todo.title}
+                          secondary={todo.category_name || ''}
+                          sx={{ textDecoration: todo.is_completed ? 'line-through' : 'none' }}
+                        />
+                        <IconButton onClick={() => setEditingTodo(todo)}><EditIcon /></IconButton>
+                        <IconButton onClick={() => handleDeleteTodo(todo.id)}><DeleteIcon /></IconButton>
+                      </ListItem>
+                    )}
+                  </Draggable>
+                ))}
+                {provided.placeholder}
+              </List>
+            </Paper>
           )}
         </Droppable>
       </DragDropContext>
-    </div>
+
+      {/* ダイアログ */}
+      <Dialog open={!!editingTodo} onClose={() => setEditingTodo(null)} fullWidth>
+        <DialogTitle>ToDoを編集</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="タイトル"
+            type="text"
+            fullWidth
+            value={editingTodo?.title || ''}
+            onChange={(e) => setEditingTodo({...editingTodo, title: e.target.value})}
+            sx={{ mb: 2 }}
+          />
+          <FormControl fullWidth>
+            <InputLabel>カテゴリ</InputLabel>
+            <Select 
+              value={editingTodo?.todo_category_id || ''} 
+              label="カテゴリ" 
+              onChange={(e) => setEditingTodo({...editingTodo, todo_category_id: e.target.value})}
+            >
+              <MenuItem value=""><em>カテゴリなし</em></MenuItem>
+              {categories.map(cat => (
+                <MenuItem key={cat.id} value={cat.id}>{cat.name}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditingTodo(null)}>キャンセル</Button>
+          <Button onClick={handleUpdateTodo}>保存</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!editCategory} onClose={() => setEditCategory(null)}>
+        <DialogTitle>カテゴリーを編集</DialogTitle>
+        <DialogContent>
+          <TextField autoFocus margin="dense" label="カテゴリー名" type="text" fullWidth value={editCategory?.name || ''} onChange={(e) => setEditCategory({...editCategory, name: e.target.value})} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditCategory(null)}>キャンセル</Button>
+          <Button onClick={handleUpdateCategory}>更新</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!deleteCategory} onClose={() => setDeleteCategory(null)}>
+        <DialogTitle>カテゴリーを削除</DialogTitle>
+        <DialogContent>
+          <Typography>「{deleteCategory?.name}」を本当に削除しますか？</Typography>
+          <Typography variant="caption">このカテゴリーを使用しているToDoがある場合は削除できません。</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteCategory(null)}>キャンセル</Button>
+          <Button onClick={confirmDeleteCategory} color="error">削除</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 通知 */}
+      <Snackbar open={notification.open} autoHideDuration={6000} onClose={() => setNotification({ ...notification, open: false })}>
+        <Alert onClose={() => setNotification({ ...notification, open: false })} severity={notification.severity} sx={{ width: '100%' }}>
+          {notification.message}
+        </Alert>
+      </Snackbar>
+    </Box>
   );
 };
 

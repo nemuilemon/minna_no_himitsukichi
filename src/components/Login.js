@@ -41,6 +41,26 @@ const Login = () => {
     }
   };
 
+  const handleGuestLogin = async () => {
+    setError('');
+    try {
+      const response = await fetch(`/api/guest-login`, {
+        method: 'POST',
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'ゲストログインに失敗しました。');
+      }
+      
+      login(data.token);
+
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   return (
     <div className="login-container">
       <form onSubmit={handleSubmit} className="login-form">
@@ -65,6 +85,7 @@ const Login = () => {
           />
         </div>
         <button type="submit">ログイン</button>
+        <button type="button" onClick={handleGuestLogin} className="guest-login-btn">ゲストとしてログイン</button>
       </form>
     </div>
   );
